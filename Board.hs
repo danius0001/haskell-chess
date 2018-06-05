@@ -8,7 +8,7 @@ data Color = Black | White deriving Show -- kolor figury
 data Figure = Figure Type Color deriving Show --typ określający figurę
 type Field = Maybe Figure -- figura albo nic
 type Board = [[Field]] -- lista list pól
-type Pos = (Int,Int) -- Pozycj
+type Pos = (Int,Int) -- Pozycja
 
 instance Eq Color where
         White == White = True
@@ -29,6 +29,7 @@ instance Eq Figure where
 
 -- Plansza startowa w postaci stringa
 startBoard = "rnbqkbnr\npppppppp\n........\n........\n........\n........\nPPPPPPPP\nRNBQKBNR"
+emptyBoard = "........\n........\n........\n........\n........\n........\n........\n........"
 
 -- Zwraca przeciwny kolor
 oppositeColor:: Color -> Color
@@ -148,14 +149,14 @@ readBoard :: String -> Board
 readBoard(boardString) = map mapBoardLine (lines boardString)
         where mapBoardLine line = map readField line
 
--- Tablica numerujaca
-numbers:: [Pos]
-numbers = [(x,y) | x<-[0..7], y<-[0..7]]
+-- Zwraca pole z planszy o podanej pozycji
+takeField :: Pos -> Board -> Field
+takeField (x,y) board = (board !! x) !! y
 
 -- Zwraca wszystkie figury z planszy obydwu graczy
 getAllFigures:: Board -> [(Pos, Field)]
 getAllFigures board = filter fig numberedBoard
-        where numberedBoard = zip numbers (concat board)
+        where numberedBoard = zip [(x,y) | x<-[0..7], y<-[0..7]] (concat board)
               fig x = isFigure (snd x)
 
 -- Zwraca pozycje figur obydwu graczy
@@ -171,7 +172,7 @@ getFiguresOnly board = map getFig (getAllFigures board)
 -- Zwraca wszystkie figury z planszy w danym kolorze
 getAllFiguresByColor:: Color -> Board -> [(Pos, Field)]
 getAllFiguresByColor color board = filter playerColor numberedBoard
-        where numberedBoard = zip numbers (concat board)
+        where numberedBoard = zip [(x,y) | x<-[0..7], y<-[0..7]] (concat board)
               playerColor x = colorFigure color (snd x)
 
 -- Zwraca pozycje figur gracza

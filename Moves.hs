@@ -5,9 +5,13 @@ import Data.Tree
 import Data.Char (intToDigit,digitToInt,ord,chr)
 import Chess.Board
 import System.Random
+import Control.Parallel.Strategies
+import Control.Monad.Reader
 
 type Move = (Pos,Pos) -- ruch z pozycji pierwszej na drugą
 type GameState = (Move,Board) --Ruch jaki został wykonany i plansza w rezultacie tego ruchu
+type GameConfig = (Color, Int) -- (mój kolor, tree depth)
+
 
 --Głębokość generowanego drzewa
 treeDepth:: Int
@@ -39,7 +43,7 @@ acnStringToMove acn = ( ( 8-(digitToInt fstRow) , charPosToInt fstCol) , ( 8-(di
 plusVector :: (Int,Int) -> (Int,Int) -> (Int,Int)
 plusVector (a,b) (c,d)=(a+c,b+d)
 
--- Mnozy wektor przez skalar
+-- Mnoży wektor przez skalar
 mulVector :: Int -> (Int,Int) -> (Int,Int)
 mulVector x (a,b) = (a*x,b*x)
 
@@ -47,31 +51,28 @@ mulVector x (a,b) = (a*x,b*x)
 updateList :: a -> Int -> [a] -> [a]
 updateList _ _ [] = []
 updateList element n (h:t)
-			| n==0 = element:t
-			| n>0 = h : (updateList element (n-1) t)
+            | n==0 = element:t
+            | n>0 = h : (updateList element (n-1) t)
 
 
 -- Ustawienie figury na dana pozycje
 updateBoard :: Field -> Pos -> Board -> Board
 updateBoard fig (x,y) board = updateList (updateList fig y row) x board
-		where row = (board !! x)
+        where row = (board !! x)
 
 -- Wstawia Nothing na wskazana pozycje
-deleteFigure:: Pos -> Board -> Board	
+deleteFigure:: Pos -> Board -> Board    
 deleteFigure pos board = updateBoard Nothing pos board
 
--- Zwraca pole z planszy o podanej pozycji		
-takeField :: Pos -> Board -> Field
-takeField (x,y) board = (board !! x) !! y
 
 -- Przesuwa figure z jednej pozycji na druga
 moveFigure :: Pos -> Pos -> Board -> Board
 moveFigure pos1 pos2 board 
         | pos1 == pos2 = board
         | otherwise = deleteFigure pos1 board2
-		    where board2 = updateBoard figure pos2 board
-			    where figure = takeField pos1 board
-			
+            where board2 = updateBoard figure pos2 board
+                  figure = takeField pos1 board
+            
 -- Wykonuje ruch na planszy
 doMove :: Move -> Board -> Board
 doMove move board = moveFigure (fst move) (snd move) board
@@ -178,23 +179,23 @@ dblMvRowPawn White = 6
 
 
 -- Zwraca liste mozliwych ruchow kazdej figury gracza
-generateAllMoves:: Color -> Board -> [(Pos,[Pos])]
-generateAllMoves color board = filter notNullMoves (zip allFigures figureMoves)
+genAllMoves:: Color -> Board -> [(Pos,[Pos])]
+genAllMoves color board = filter notNullMoves (zip allFigures figureMoves)
         where notNullMoves x = not(null(snd x))
               allFigures = getFiguresPosByColor color board
               figureMoves = map (\x-> availableMoves x board) allFigures
 
--- Generuje wszytskie możliwe plansze dla podanego koloru (wykonując jeden ruch)			
-generateAllGameStates:: Color -> Board -> [GameState]
-generateAllGameStates color board = [(((fst fig),pos), moveFigure (fst fig) pos board) | fig<-positions, pos<-(snd fig)]
-        where positions = generateAllMoves color board
+-- Generuje wszytskie możliwe plansze dla podanego koloru (wykonując jeden ruch)            
+genAllGameStates:: Color -> Board -> [GameState]
+genAllGameStates color board = [(((fst fig),pos), moveFigure (fst fig) pos board) | fig<-positions, pos<-(snd fig)]
+        where positions = genAllMoves color board
 
 -- Generuje drzewo wszystkich ruchów zaczynając od podanego koloru i stanu gry
 genGameTree :: Color -> GameState -> Tree GameState
 genGameTree color gameState = Node gameState [genGameTree (oppositeColor color) gstat | gstat <- gameStates] 
         where gameStates 
-		| hasKing color (snd gameState) = generateAllGameStates color (snd gameState)
-		| otherwise = []
+                | hasKing color (snd gameState) = genAllGameStates color (snd gameState)
+                | otherwise = []
 
 -- Generuje drzewo wszystkich ruchów zaczynając od podanego koloru i planszy
 genGameTreeBoard :: Color -> Board -> Tree GameState
@@ -213,32 +214,28 @@ minimax White (Node game lista) = maximum $ map (minimax Black) lista
 minimax Black (Node game lista) = minimum $ map (minimax White) lista
 
 -- Zwraca wszystkie najlepsze ruchy w danym momencie
-getAllNextStates :: Color -> Tree GameState -> [GameState]
-getAllNextStates color node = map (rootLabel . snd) (filter (\x -> (fst x) == value) (zip minmaxTab (subForest node)))
-		where minmaxTab = map (minimax color) (subForest node)
-		      value = if (color == White) 
+getBestStatesFromTree :: Color -> Tree GameState -> [GameState]
+getBestStatesFromTree color node = map (rootLabel . snd) (filter (\x -> (fst x) == value) (zip minmaxTab (subForest node)))
+        where minmaxTab = map (minimax (oppositeColor color)) (subForest node)
+              value = if (color == White) 
                         then maximum minmaxTab
                         else minimum minmaxTab
-		      
--- Wybiera jaki nastepny ruch wykonac (pierwszy z dostępnych)
-getNextState :: Color -> Tree GameState -> GameState
-getNextState color node = head $ getAllNextStates color node
 
--- Wybiera jaki nastepny ruch wykonac dla danej planszy	(pierwszy z dostępnych)	      
-getNextStateBoard :: Color -> Board -> GameState
-getNextStateBoard color board = getNextState color node
-        where node = takeGameTree treeDepth (genGameTreeBoard color board)
+getNextStateFromTree :: Tree GameState -> ReaderT GameConfig IO (Maybe GameState)
+getNextStateFromTree tree = do
+    (color,_) <- ask
+    let states = getBestStatesFromTree color tree
+    let len = length states
+    if len > 0 then do
+        element <- lift $ getStdRandom $ randomR (0,len-1)
+        return $ Just $ states!!element
+    else
+        return Nothing
 
--- Wybiera losowy ruch z najlepszych dostępnych
-getNextStateRnd :: Color -> Tree GameState -> StdGen -> (GameState, StdGen)
-getNextStateRnd color node gen = ((states!!element),gen2)
-        where states = getAllNextStates color node
-              (element,gen2) = randomR (0,len) gen
-                where len = length states
-                
--- Wybiera losowy ruch z najlepszych dostępnych dla danej planszy		      
-getNextStateRndBoard :: Color -> Board  -> StdGen -> (GameState, StdGen)
-getNextStateRndBoard color board gen = getNextStateRnd color node gen
-        where node = takeGameTree treeDepth (genGameTreeBoard color board)
-        
+getNextState :: Board -> ReaderT GameConfig IO (Maybe GameState)
+getNextState board = do
+    (color, treeDepth) <- ask
+    let tree = takeGameTree treeDepth (genGameTreeBoard color board)
+    element <- getNextStateFromTree tree
+    return element
         
