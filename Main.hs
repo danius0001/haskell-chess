@@ -97,6 +97,8 @@ main = do
     args <- getArgs
     let initialBoard = (readBoard startBoard)
     case (listToMaybe args) of
+        Just "test" -> do
+            evalStateT (runReaderT makeMove (White,treeDepth)) (initialBoard,[])
         Just "w" -> do -- białe zaczynają
             (nextBoard, nextHistory) <- evalStateT (runReaderT (do{makeMove;lift get}) (White,treeDepth)) (initialBoard,[])
             go White treeDepth nextBoard nextHistory

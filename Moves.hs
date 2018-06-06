@@ -13,10 +13,6 @@ type GameState = (Move,Board) --Ruch jaki został wykonany i plansza w rezultaci
 type GameConfig = (Color, Int) -- (mój kolor, tree depth)
 
 
---Głębokość generowanego drzewa
-treeDepth:: Int
-treeDepth = 4
-
 --Pusty ruch
 emptyMove :: Move
 emptyMove = ((0,0),(0,0))
@@ -216,8 +212,9 @@ minimax Black (Node game lista) = minimum $ map (minimax White) lista
 -- Zwraca wszystkie najlepsze ruchy w danym momencie
 getBestStatesFromTree :: Color -> Tree GameState -> [GameState]
 getBestStatesFromTree color node = map (rootLabel . snd) (filter (\x -> (fst x) == value) (zip minmaxTab (subForest node)))
-        where minmaxTab = map (minimax (oppositeColor color)) (subForest node)
-              value = if (color == White) 
+--        where minmaxTab = map (minimax (oppositeColor color)) (subForest node)
+        where minmaxTab = parMap rseq (minimax (oppositeColor color)) (subForest node)
+              value = if (color == White)
                         then maximum minmaxTab
                         else minimum minmaxTab
 
@@ -235,7 +232,17 @@ getNextStateFromTree tree = do
 getNextState :: Board -> ReaderT GameConfig IO (Maybe GameState)
 getNextState board = do
     (color, treeDepth) <- ask
-    let tree = takeGameTree treeDepth (genGameTreeBoard color board)
+    let tree = takeGameTree treeDepth (genGameTreeBoard color board) -- `using` parTree2
     element <- getNextStateFromTree tree
     return element
-        
+
+parTree0 = r0
+
+parTree1:: Strategy (Tree a)
+parTree1 = parTraversable rseq
+
+parTree2:: Strategy (Tree a)
+parTree2 (Node h t) = do
+    let h' = h `using` rpar
+    let t' = t `using` parList (evalTraversable rseq)
+    return $ Node h' t'
