@@ -1,0 +1,52 @@
+name:                haskell-chess
+version:             0.1.0.0
+github:              "danius0001/haskell-chess"
+license:             BSD3
+author:              "Daniel Tyka"
+copyright:           "2018 Daniel Tyka"
+
+extra-source-files:
+- README.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/danius0001/haskell-chess#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- parsec
+- text
+- mtl
+- parallel
+- random
+- containers
+
+library:
+  source-dirs: src
+
+executables:
+  chess:
+    main:                Main.hs
+    source-dirs: app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - haskell-chess
+
+  benchmark:
+    main:                Benchmark.hs
+    source-dirs: test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -eventlog
+    - -with-rtsopts=-N
+    dependencies:
+    - haskell-chess

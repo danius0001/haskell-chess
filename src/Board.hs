@@ -1,4 +1,4 @@
-module Chess.Board where
+module Board where
 
 import Data.Maybe
 import Data.Char (intToDigit)

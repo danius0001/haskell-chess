@@ -1,9 +1,9 @@
-module Chess.Moves where
+module Moves where
 
 import Data.Maybe
 import Data.Tree
 import Data.Char (intToDigit,digitToInt,ord,chr)
-import Chess.Board
+import Board
 import System.Random
 import Control.Parallel.Strategies
 import Control.Monad.Reader
@@ -213,7 +213,7 @@ minimax Black (Node game lista) = minimum $ map (minimax White) lista
 getBestStatesFromTree :: Color -> Tree GameState -> [GameState]
 getBestStatesFromTree color node = map (rootLabel . snd) (filter (\x -> (fst x) == value) (zip minmaxTab (subForest node)))
 --        where minmaxTab = map (minimax (oppositeColor color)) (subForest node)
-        where minmaxTab = parMap rseq (minimax (oppositeColor color)) (subForest node)
+        where minmaxTab = parMap rpar (minimax (oppositeColor color)) (subForest node)
               value = if (color == White)
                         then maximum minmaxTab
                         else minimum minmaxTab
@@ -232,7 +232,7 @@ getNextStateFromTree tree = do
 getNextState :: Board -> ReaderT GameConfig IO (Maybe GameState)
 getNextState board = do
     (color, treeDepth) <- ask
-    let tree = takeGameTree treeDepth (genGameTreeBoard color board) -- `using` parTree2
+    let tree = takeGameTree treeDepth (genGameTreeBoard color board)  -- `using` parTree2
     element <- getNextStateFromTree tree
     return element
 

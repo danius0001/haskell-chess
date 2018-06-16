@@ -1,15 +1,15 @@
-import System.Environment
+module Chess where
+
 import Control.Monad.State
 import Control.Monad.Reader
 import Text.ParserCombinators.Parsec
 import System.IO
 import Data.Maybe
-import System.Random
 import Data.List (intercalate)
 
 
-import Chess.Board
-import Chess.Moves
+import Board
+import Moves
 
 -- Parser do parsowania liter a-h
 parsePosC :: Parser Char
@@ -43,33 +43,11 @@ parseACN = do
 type History = [ACN]
 type Game a = ReaderT GameConfig (StateT (Board,History) IO) a
 
-
 -- Wyswielanie historii gry na standarsowe wyjscie diagnostyczne
 printHistory :: Show a => [a] -> IO ()
 printHistory h =  do
     let history = intercalate ", " (map show h)
     hPutStrLn stderr $ "Game history = " ++ history
-
--- Funkcja rozgrywki
-play :: String -> Game ()
-play i = do
-    (color, treeDepth) <- ask
-    (board,history)<- lift $ get
-    case parse parseACN "Parsing ACN error" i of
-        Right acn -> do
-            liftIO $ hPutStrLn stderr $ "Actual move = " ++ (show acn)
-            lift $ put ((doMove (acnStringToMove (show acn)) board) , acn:history)
-        Left _ -> fail ("Game over")
-    (_, history2) <- lift $ get
-    liftIO $ printHistory history2
-    makeMove
-
--- Funkcja rozpoczynająca rozgrywkę
-doPlay :: Game ()
-doPlay = liftIO getContents >>= (mapM_ play) . lines
-
-go :: Color -> Int -> Board -> History -> IO ()
-go color treeDepth board history = evalStateT (runReaderT doPlay (color,treeDepth)) (board,history)
 
 makeMove :: Game ()
 makeMove = do
@@ -78,29 +56,12 @@ makeMove = do
     maybeNextState <- lift $ lift $ runReaderT (getNextState board) (color, treeDepth)
     case maybeNextState of
         Nothing -> do
-            liftIO $ putStrLn "Nothing to do - I lost"
-            liftIO $ hFlush stdout
+            liftIO $ putStrLn "Nothing to do - I lost" >> hFlush stdout
             fail ("Game over")
         Just nextState -> do
             let nextMove = moveToACNString $ fst nextState
             let nextBoard = snd nextState
             let nextHistory = (readACN nextMove):history
-            liftIO $ putStrLn nextMove
-            liftIO $ hFlush stdout
+            liftIO $ putStrLn nextMove >> hFlush stdout
             liftIO $ hPutStrLn stderr (showBoard nextBoard)
             lift $ put (nextBoard, nextHistory)
-
--- Główna funkcja programu
-main :: IO ()
-main = do
-    let treeDepth = 4
-    args <- getArgs
-    let initialBoard = (readBoard startBoard)
-    case (listToMaybe args) of
-        Just "test" -> do
-            evalStateT (runReaderT makeMove (White,treeDepth)) (initialBoard,[])
-        Just "w" -> do -- białe zaczynają
-            (nextBoard, nextHistory) <- evalStateT (runReaderT (do{makeMove;lift get}) (White,treeDepth)) (initialBoard,[])
-            go White treeDepth nextBoard nextHistory
-        _ -> 
-            go Black treeDepth initialBoard [] -- domyślnie grają czarne
